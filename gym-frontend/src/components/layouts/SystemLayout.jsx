@@ -48,7 +48,7 @@ export default function SystemLayout({ children }) {
     { name: "Attendances", to: "/attendances", icon: Clock },
     { name: "Payments", to: "/payments", icon: CreditCard },
     { name: "Payrolls", to: "/payrolls", icon: Wallet },
-    { name: "Telegram", to: "/telegram", icon: Send },
+    // { name: "Telegram", to: "/telegram", icon: Send },
   ], []);
 
   const handleLogout = () => {

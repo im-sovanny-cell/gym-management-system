@@ -31,6 +31,11 @@ import Payments from "./pages/payments/Payments.jsx";
 import PaymentEdit from "./pages/payments/PaymentEdit";
 import PaymentQR from "./pages/payments/PaymentQR";
 
+import Payrolls from "./pages/payrolls/Payrolls";
+import PayrollCreate from "./pages/payrolls/PayrollCreate";
+import PayrollEdit from "./pages/payrolls/PayrollEdit";
+
+
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -61,6 +66,41 @@ function AppContent() {
           </ProtectedRoute>
         }
       />
+
+      {/* PAYROLL ROUTES */}
+      <Route
+        path="/payrolls"
+        element={
+          <ProtectedRoute>
+            <SystemLayout>
+              <Payrolls />
+            </SystemLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/payrolls/create"
+        element={
+          <ProtectedRoute>
+            <SystemLayout>
+              <PayrollCreate />
+            </SystemLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/payrolls/:id"
+        element={
+          <ProtectedRoute>
+            <SystemLayout>
+              <PayrollEdit />
+            </SystemLayout>
+          </ProtectedRoute>
+        }
+      />
+
 
       {/* PAYMENT QR PAGE */}
       <Route
@@ -324,7 +364,7 @@ function AppContent() {
         }
       />
 
-      <Route
+      {/* <Route
         path="/telegram"
         element={
           <ProtectedRoute>
@@ -333,7 +373,7 @@ function AppContent() {
             </SystemLayout>
           </ProtectedRoute>
         }
-      />
+      /> */}
 
       <Route path="*" element={<Navigate to={user ? "/dashboard" : "/login"} />} />
     </Routes>

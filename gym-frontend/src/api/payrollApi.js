@@ -1,5 +1,16 @@
-import api from './axiosInstance'
-export const listPayrolls = () => api.get('/api/payrolls')
-export const createPayroll = (payload) => api.post('/api/payrolls', payload)
-export const updatePayroll = (id, payload) => api.put(`/api/payrolls/${id}`, payload)
-export const deletePayroll = (id) => api.delete(`/api/payrolls/${id}`)
+import { API } from "./http";
+
+export const getAllPayrolls = () =>
+  API.get("/payrolls").then(r => r.data);
+
+export const getPayrollById = (id) =>
+  API.get(`/payrolls/${id}`).then(r => r.data);
+
+export const createPayroll = (data) =>
+  API.post("/payrolls", data).then(r => r.data);
+
+export const updatePayroll = (id, data) =>
+  API.put(`/payrolls/${id}`, data).then(r => r.data);
+
+export const deletePayroll = (id) =>
+  API.delete(`/payrolls/${id}`).then(r => r.data);
