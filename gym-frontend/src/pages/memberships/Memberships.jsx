@@ -1,144 +1,284 @@
 // src/pages/memberships/Memberships.jsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import Swal from "sweetalert2";
 
-import { getAllMemberships, deleteMembership } from "../../api/membershipApi";
+import {
+  Search,
+  SortAsc,
+  SortDesc,
+  User,
+  CalendarDays,
+  Activity,
+  Edit,
+} from "lucide-react";
+
+import { getAllMemberships } from "../../api/membershipApi";
 import { getAllUsers } from "../../api/userApi";
 import { getAllGyms } from "../../api/gymApi";
+
+// Format dates
+const formatDate = (str) => {
+  if (!str) return "—";
+  const d = new Date(str);
+  if (isNaN(d)) return str;
+  return d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+  });
+};
 
 export default function Memberships() {
   const nav = useNavigate();
 
-  const [items, setItems] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [gyms, setGyms] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [rows, setRows] = useState([]);
+  const [filtered, setFiltered] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => { load(); }, []);
+  const [search, setSearch] = useState("");
+  const [sortField, setSortField] = useState("membershipId");
+  const [sortOrder, setSortOrder] = useState("asc");
+
+  useEffect(() => {
+    load();
+  }, []);
 
   const load = async () => {
     try {
       setLoading(true);
-      const [ms, u, g] = await Promise.all([
+
+      const [ms, us, gs] = await Promise.all([
         getAllMemberships(),
         getAllUsers(),
         getAllGyms(),
       ]);
-      setItems(Array.isArray(ms) ? ms : []);
-      setUsers(Array.isArray(u) ? u : []);
-      setGyms(Array.isArray(g) ? g : []);
+
+      const userMap = new Map(us.map((u) => [u.userId, u]));
+      const gymMap = new Map(gs.map((g) => [g.gymId, g.name]));
+
+      const result = ms.map((m) => ({
+        membershipId: m.membershipId,
+        planType: m.planType,
+        startDate: m.startDate,
+        endDate: m.endDate,
+        status: m.status,
+        memberName: userMap.get(m.userId)
+          ? `${userMap.get(m.userId).firstName} ${userMap.get(m.userId).lastName}`
+          : "—",
+        trainerName: userMap.get(m.trainerId)
+          ? `${userMap.get(m.trainerId).firstName} ${userMap.get(m.trainerId).lastName}`
+          : "—",
+        gymName: gymMap.get(m.gymId) || "—",
+      }));
+
+      setRows(result);
+      setFiltered(result);
     } finally {
       setLoading(false);
     }
   };
 
-  const userById = (id) => users.find((x) => x.userId === id);
-  const gymById = (id) => gyms.find((x) => x.gymId === id);
+  // Search + Sort
+  useEffect(() => {
+    let data = [...rows];
 
-  const getMemberLabel = (id) => {
-    const u = userById(id);
-    if (!u) return `#${id ?? "-"}`;
-    return `#${u.userId} — ${u.firstName} ${u.lastName}`;
-  };
+    if (search.trim()) {
+      const k = search.toLowerCase();
+      data = data.filter(
+        (r) =>
+          r.memberName.toLowerCase().includes(k) ||
+          r.trainerName.toLowerCase().includes(k) ||
+          r.planType.toLowerCase().includes(k) ||
+          r.status.toLowerCase().includes(k) ||
+          r.gymName.toLowerCase().includes(k)
+      );
+    }
 
-  const getTrainerLabel = (id) => {
-    if (!id) return "—";
-    const u = userById(id);
-    return u ? `${u.firstName} ${u.lastName}` : "—";
-  };
-
-  const handleDelete = async (id) => {
-    const { isConfirmed } = await Swal.fire({
-      icon: "warning",
-      title: "Delete this membership?",
-      text: "This action cannot be undone.",
-      showCancelButton: true,
-      confirmButtonText: "Delete",
+    data.sort((a, b) => {
+      const aVal = (a[sortField] || "").toString().toLowerCase();
+      const bVal = (b[sortField] || "").toString().toLowerCase();
+      if (aVal < bVal) return sortOrder === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortOrder === "asc" ? 1 : -1;
+      return 0;
     });
-    if (!isConfirmed) return;
-    await deleteMembership(id);
-    await load();
-    Swal.fire("Deleted!", "", "success");
-  };
+
+    setFiltered(data);
+  }, [search, sortField, sortOrder, rows]);
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-bold">Memberships</h2>
-        <button
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-          onClick={() => nav("/memberships/create")}
-        >
-          + Create Membership
-        </button>
+    <div className="p-6 min-h-screen bg-gray-50 dark:bg-gray-900 transition">
+
+      {/* HEADER */}
+      <div className="flex flex-col sm:flex-row justify-between items-center mb-6">
+        <h2 className="text-3xl font-semibold flex items-center gap-2 text-gray-900 dark:text-gray-100">
+          <Activity className="text-blue-600 dark:text-blue-400" />
+          Membership Management
+        </h2>
+
+        <div className="flex flex-wrap items-center gap-3 mt-3 sm:mt-0">
+
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 text-gray-400 dark:text-gray-500 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Search membership..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-700 
+                         rounded-lg text-sm w-64 bg-white dark:bg-gray-800
+                         text-gray-800 dark:text-gray-100 focus:ring-2 
+                         focus:ring-blue-400 focus:outline-none"
+            />
+          </div>
+
+          {/* Sort Field */}
+          <select
+            value={sortField}
+            onChange={(e) => setSortField(e.target.value)}
+            className="border border-gray-300 dark:border-gray-700 rounded-lg 
+                       px-3 py-2 text-sm bg-white dark:bg-gray-800
+                       text-gray-800 dark:text-gray-100"
+          >
+            <option value="membershipId">Sort by ID</option>
+            <option value="memberName">Member</option>
+            <option value="trainerName">Trainer</option>
+            <option value="planType">Plan</option>
+            <option value="status">Status</option>
+            <option value="gymName">Gym</option>
+          </select>
+
+          {/* Sort Order */}
+          <button
+            onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+            className="border border-gray-300 dark:border-gray-700 
+                       rounded-lg px-3 py-2 text-sm flex items-center gap-2 
+                       bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 
+                       hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+          >
+            {sortOrder === "asc" ? (
+              <>
+                <SortAsc size={16} /> Asc
+              </>
+            ) : (
+              <>
+                <SortDesc size={16} /> Desc
+              </>
+            )}
+          </button>
+
+          {/* Add Membership */}
+          <button
+            onClick={() => nav("/memberships/create")}
+            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 
+                       text-white px-4 py-2 rounded-lg text-sm font-medium shadow transition"
+          >
+            + Add Membership
+          </button>
+        </div>
       </div>
 
-      {loading ? (
-        <div className="p-10 text-center text-gray-500">Loading...</div>
-      ) : (
-        <div className="overflow-x-auto bg-white rounded shadow">
-          <table className="w-full text-left">
-            <thead className="bg-gray-50 text-sm text-gray-700 border-b">
-              <tr>
-                <th className="p-3">Member</th>
-                <th className="p-3">Trainer</th>
-                <th className="p-3">Plan</th>
-                <th className="p-3">Start</th>
-                <th className="p-3">End</th>
-                <th className="p-3">Status</th>
-                <th className="p-3">Gym</th>
-                <th className="p-3 text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.length === 0 ? (
-                <tr>
-                  <td className="p-6 text-center text-gray-500" colSpan={8}>
-                    No memberships found.
-                  </td>
-                </tr>
-              ) : (
-                items.map((m) => (
-                  <tr key={m.membershipId} className="border-b hover:bg-gray-50">
-                    <td className="p-3">{getMemberLabel(m.userId)}</td>
-                    <td className="p-3">{getTrainerLabel(m.trainerId)}</td>
-                    <td className="p-3">{m.planType}</td>
-                    <td className="p-3">{m.startDate}</td>
-                    <td className="p-3">{m.endDate}</td>
-                    <td className="p-3">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        m.status === "active"
-                          ? "bg-green-100 text-green-700"
-                          : m.status === "expired"
-                          ? "bg-red-100 text-red-700"
-                          : "bg-gray-100 text-gray-700"
-                      }`}>
-                        {m.status}
-                      </span>
-                    </td>
-                    <td className="p-3">{gymById(m.gymId)?.name || "—"}</td>
-                    <td className="p-3 text-center space-x-2">
-                      <button
-                        className="px-3 py-1 rounded bg-yellow-500 hover:bg-yellow-600 text-white text-sm"
-                        onClick={() => nav(`/memberships/${m.membershipId}`)}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="px-3 py-1 rounded bg-red-600 hover:bg-red-700 text-white text-sm"
-                        onClick={() => handleDelete(m.membershipId)}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+      {/* TABLE */}
+      <div className="overflow-hidden rounded-xl shadow border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+
+        {/* HEADER ROW */}
+        <div className="grid grid-cols-[6%_17%_17%_10%_12%_12%_10%_10%]
+                        border-b bg-gray-100 dark:bg-gray-700 
+                        text-blue-800 dark:text-blue-300 uppercase text-xs font-semibold">
+          <div className="px-4 py-3">ID</div>
+          <div className="px-4 py-3">MEMBER</div>
+          <div className="px-4 py-3">TRAINER</div>
+          <div className="px-4 py-3">PLAN</div>
+          <div className="px-4 py-3">START</div>
+          <div className="px-4 py-3">END</div>
+          <div className="px-4 py-3 text-center">STATUS</div>
+          <div className="px-4 py-3 text-center">ACTIONS</div>
         </div>
-      )}
+
+        {/* LOADING — PREMIUM STYLE */}
+        {loading && (
+          <div className="text-center py-6 text-gray-500 dark:text-gray-400 italic">
+            Loading memberships...
+          </div>
+        )}
+
+        {/* DATA ROWS */}
+        {!loading &&
+          (filtered.length > 0 ? (
+            filtered.map((m, i) => (
+              <div
+                key={m.membershipId}
+                className={`grid grid-cols-[6%_17%_17%_10%_12%_12%_10%_10%]
+                            items-center border-b text-sm ${
+                              i % 2 === 0
+                                ? "bg-white dark:bg-gray-800"
+                                : "bg-gray-50 dark:bg-gray-900/40"
+                            } hover:bg-gray-50 dark:hover:bg-gray-700 transition`}
+              >
+                {/* ID */}
+                <div className="px-4 py-3">{m.membershipId}</div>
+
+                {/* MEMBER */}
+                <div className="px-4 py-3 flex items-center gap-2 whitespace-nowrap overflow-hidden text-ellipsis">
+                  <User size={14} className="text-gray-500" />
+                  {m.memberName}
+                </div>
+
+                {/* TRAINER */}
+                <div className="px-4 py-3 whitespace-nowrap overflow-hidden text-ellipsis">
+                  {m.trainerName}
+                </div>
+
+                {/* PLAN */}
+                <div className="px-4 py-3 whitespace-nowrap overflow-hidden text-ellipsis">
+                  {m.planType}
+                </div>
+
+                {/* START */}
+                <div className="px-4 py-3 flex items-center gap-2 whitespace-nowrap">
+                  <CalendarDays size={14} className="text-gray-500" />
+                  {formatDate(m.startDate)}
+                </div>
+
+                {/* END */}
+                <div className="px-4 py-3 whitespace-nowrap">
+                  {formatDate(m.endDate)}
+                </div>
+
+                {/* STATUS */}
+                <div className="px-4 py-3 text-center">
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs ${
+                      m.status === "active"
+                        ? "bg-green-100 text-green-700"
+                        : m.status === "expired"
+                        ? "bg-red-100 text-red-700"
+                        : "bg-gray-100 text-gray-700"
+                    }`}
+                  >
+                    {m.status}
+                  </span>
+                </div>
+
+                {/* ACTIONS */}
+                <div className="px-4 py-3 flex justify-center">
+                  <button
+                    onClick={() => nav(`/memberships/${m.membershipId}`)}
+                    className="flex items-center gap-1 px-3 py-1 text-xs font-medium 
+                          text-yellow-700 bg-yellow-100 hover:bg-yellow-200 
+                          rounded-full transition"
+                  >
+                    <Edit size={14} /> Edit
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-6 text-gray-500 dark:text-gray-400 italic">
+              No memberships found.
+            </div>
+          ))}
+      </div>
     </div>
   );
 }

@@ -6,7 +6,6 @@ import Swal from "sweetalert2";
 import { getPaymentById, updatePayment } from "/src/api/paymentApi.js";
 import { API } from "/src/api/http.js";
 
-// static KHQR images
 import ABA_IMG from "../khqr/aba.jpg";
 import ACLEDA_IMG from "../khqr/acleda.jpg";
 
@@ -16,92 +15,151 @@ export default function PaymentQR() {
 
   const [payment, setPayment] = useState(null);
   const [bank, setBank] = useState("ABA");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    load();
+    (async () => {
+      try {
+        const p = await getPaymentById(id);
+        setPayment(p);
+        if (p?.method) setBank(p.method);
+      } catch (err) {
+        Swal.fire("Error", "Unable to load payment data", "error");
+      }
+      setLoading(false);
+    })();
   }, []);
 
-  const load = async () => {
-    try {
-      const data = await getPaymentById(id);
-      setPayment(data);
-    } catch (e) {
-      Swal.fire("Error", "Failed to load payment", "error");
-    }
-  };
-
   const confirmPaid = async () => {
+    if (!payment) return;
+
+    const ask = await Swal.fire({
+      title: "Confirm Payment?",
+      text: `Mark payment #${payment.paymentId} as paid`,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonColor: "#16a34a",
+    });
+
+    if (!ask.isConfirmed) return;
+
     try {
-      // update DB
-      await updatePayment(id, {
+      setSaving(true);
+
+      await updatePayment(payment.paymentId, {
         ...payment,
         status: "paid",
         method: bank,
       });
 
-      // name fix
-      const fullName =
-        `${payment.firstName || ""} ${payment.lastName || ""}`.trim();
-
-      // send to telegram controller
       await API.post("/telegram/notify", {
         paymentId: payment.paymentId,
         userId: payment.userId,
-        userName: payment.userName,// <-- FIX HERE
+        userName: payment.userName,
         amount: payment.amount,
-        bank: bank,
+        bank,
       });
 
       Swal.fire("Success", "Payment marked as paid!", "success");
       nav("/payments");
-
-    } catch (e) {
-      Swal.fire("Error", e.message || "Failed to confirm payment", "error");
+    } catch (err) {
+      Swal.fire("Error", err.message || "Update failed", "error");
     }
+
+    setSaving(false);
   };
 
-  if (!payment) return <div className="p-6 text-gray-500">Loading...</div>;
+  if (loading)
+    return (
+      <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+        Loading payment…
+      </div>
+    );
+
+  if (!payment)
+    return (
+      <div className="p-8 text-center text-red-500">Payment not found</div>
+    );
 
   return (
-    <div className="p-8 max-w-lg mx-auto text-center">
+    <div className="p-6 flex justify-center items-center min-h-screen bg-gray-100 dark:bg-gray-900 transition">
+      <div className="w-full max-w-lg bg-white dark:bg-gray-800 shadow-xl rounded-3xl p-8 border border-gray-200 dark:border-gray-700">
 
-      <h2 className="text-2xl font-bold mb-6">Scan To Pay</h2>
+        <h2 className="text-2xl font-bold text-center text-gray-800 dark:text-white mb-6">
+          Scan to Pay
+        </h2>
 
-      <div className="text-lg mb-2 font-semibold">
-        Amount: ${payment.amount}
+        {/* Bank Switch */}
+        <div className="flex bg-gray-200 dark:bg-gray-700 rounded-full p-1 mb-6">
+          {["ABA", "ACLEDA"].map((b) => (
+            <button
+              key={b}
+              onClick={() => setBank(b)}
+              className={`flex-1 py-2 rounded-full text-sm font-medium transition ${
+                bank === b
+                  ? "bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 shadow"
+                  : "text-gray-600 dark:text-gray-300"
+              }`}
+            >
+              {b}
+            </button>
+          ))}
+        </div>
+
+        {/* QR — FULL Premium */}
+        <div className="flex justify-center mb-8">
+          <div className="p-4 bg-white dark:bg-gray-900 rounded-3xl shadow-xl border border-gray-300 dark:border-gray-700">
+            <img
+              src={bank === "ABA" ? ABA_IMG : ACLEDA_IMG}
+              alt="KHQR"
+              className="w-80 h-80 object-contain rounded-2xl"
+            />
+          </div>
+        </div>
+
+        {/* Payment Info */}
+        <div className="space-y-3 text-gray-700 dark:text-gray-300 mb-6">
+          <div className="flex justify-between text-lg">
+            <span>Amount:</span>
+            <strong className="text-xl text-green-600 dark:text-green-400">
+              ${Number(payment.amount).toFixed(2)}
+            </strong>
+          </div>
+
+          <div className="flex justify-between">
+            <span>Member:</span>
+            <strong>{payment.userName}</strong>
+          </div>
+
+          <div className="flex justify-between">
+            <span>Plan:</span>
+            <strong>{payment.membershipPlan}</strong>
+          </div>
+        </div>
+
+        {/* Buttons */}
+        <div className="flex justify-between mt-8">
+          <button
+            onClick={() => nav("/payments")}
+            className="px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+          >
+            Back
+          </button>
+
+          <button
+            disabled={saving || payment.status === "paid"}
+            onClick={confirmPaid}
+            className={`px-6 py-2 rounded-lg text-white font-medium transition ${
+              payment.status === "paid"
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-green-600 hover:bg-green-700"
+            }`}
+          >
+            {saving ? "Processing…" : payment.status === "paid" ? "Paid" : "Confirm Paid"}
+          </button>
+        </div>
       </div>
-
-      <select
-        className="border p-2 rounded mb-4"
-        value={bank}
-        onChange={(e) => setBank(e.target.value)}
-      >
-        <option value="ABA">ABA</option>
-        <option value="ACLEDA">ACLEDA</option>
-      </select>
-
-      <img
-        src={bank === "ABA" ? ABA_IMG : ACLEDA_IMG}
-        alt="KHQR"
-        className="w-72 mx-auto rounded-lg shadow mb-6"
-      />
-
-      <button
-        onClick={confirmPaid}
-        className="bg-green-600 text-white px-6 py-3 rounded font-semibold"
-      >
-        Confirm Paid
-      </button>
-
-      <div className="mt-4">
-        <button
-          className="text-gray-500 underline"
-          onClick={() => nav("/payments")}
-        >
-          Back
-        </button>
-      </div>
-
     </div>
   );
 }
